@@ -99,3 +99,42 @@ class CriticNetwork(nn.Module):
     def load_checkpoint(self):
         self.load_state_dict(T.load(self.checkpoint_file))
 
+class Agent:
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95, policy_clip=0.2, batch_size=64, N=2048, n_epoch=10) # hyperparameters from paper. N is the number of timesteps before we update the network
+        self.gamma = gamma
+        self.policy_clip = policy_clip
+        self.n_epoch = n_epoch
+        self.gae_lambda = gae_lambda
+        self.batch_size = batch_size
+
+        self.actor = ActorNetwork(n_actions, input_dims, alpha)
+        self.critic = CriticNetwork(input_dims, alpha)
+        self.memory = PPOMemory(batch_size)
+
+    def remember(self, state, action, probs, vals, reward, done):
+        self.memory.store(state, action, probs, vals, reward, done)
+
+    def save_models(self):
+        print('Saving models...')
+        self.actor.save_checkpoint()
+        self.critic.save_checkpoint()
+
+    def load_models(self):
+        print('Loading models...')
+        self.actor.load_checkpoint()
+        self.critic.load_checkpoint()
+
+    def choose_action(self, observation):
+        state = T.tensor([observation], dtype=T.float).to(self.actor.device) #  We want a 2D tensor with shape (batch_size, num_features). We are adding a batch dimension to the observation by wrapping it in a list
+        dist = self.actor(state)
+        value = self.critic(state)
+        action = dist.sample() # sample an action from the distribution
+
+        probs = T.squeeze(dist.log_prob(action)).item() # squeeze removes redundant dimensions from the tensor. item() returns the value of this tensor as a standard Python number
+        action = T.squeeze(action).item()
+        value = T.squeeze(value).item()
+
+        return action, probs, value
+    
+    def learn(self):
+
