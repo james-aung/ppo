@@ -8,9 +8,9 @@ from torch.distributions.categorical import Categorical
 class PPOMemory:
     def __init__(self, batch_size):
         self.states = []
+        self.actions = []
         self.probs = [] #log probs
         self.vals = [] #state values
-        self.actions = []
         self.rewards = []
         self.dones = []
 
@@ -21,7 +21,7 @@ class PPOMemory:
         batch_start = np.arange(0, n_states, self.batch_size) # np.arrange creates an array of evenly spaced values, thus we are creating an array of batch start indices
         indices = np.arange(n_states, dtype=np.int64)
         np.random.shuffle(indices) # shuffle the indices for stochastic gradient ascent
-        batches = [indices[i:i+self.batch_size] for i in batch_start] # for each batch start index, we create a batch of indices
+        batches = [indices[i:i+self.batch_size] for i in batch_start] # for each batch start index, we create a batch of indices. Looks like [[0, 1, 2, ..., 63], [64, 65, 66, ..., 127], ...]
 
         return np.array(self.states), np.array(self.actions), np.array(self.probs), np.array(self.vals), np.array(self.rewards), np.array(self.dones), batches
     
@@ -137,4 +137,24 @@ class Agent:
         return action, probs, value
     
     def learn(self):
+        # first we generate the batches that we will use to update the network
+        for _ in range(self.n_epoch): # we iterate over the batches for n_epoch times
+            states, actions, old_probs, values, rewards, dones, batches = self.memory.generate_batches()
+            
+            # Calculate advantages
+            advantage = np.zeros(len(rewards), dtype=np.float32) # initialize advantage array with zeros for each timestep
 
+            # For each timestep, we calculate the discounted sum of future rewards and subtract the state value to get the advantage
+            # The advantage is the discounted sum of future rewards minus the estimated state value (from the critic)
+            for t in range(len(rewards)-1): # we don't calculate the advantage for the last timestep because there is no next state, so we leave it as 0
+                discount = 1 # we initialize the discount factor to 1 and decrease it for each timestep by multiplying it by gamma*lambda
+                a_t = 0
+                for k in range(t, len(rewards)-1): # we only look at future rewards TODO why do we -1?
+                    value_next_state = self.gamma*values[k+1] * (1-int(dones[k])) # if dones[k] is 1, then we are at the end of the episode and there is no next state and so we multiply by 0. dones is a boolean array
+                    td_error = rewards[k] + value_next_state - values[k]
+                    a_t += discount*td_error
+                    discount *= self.gamma*self.gae_lambda # rewards further in the future are discounted more
+                advantage[t] = a_t
+            advantage = T.tensor(advantage).to(self.actor.device)
+
+            values = T.tensor(values).to(self.actor.device)
