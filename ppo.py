@@ -1,8 +1,8 @@
 import os
 import numpy as np
 import torch as T
-import touch.nn as nn
-import touch.optim as optim
+import torch.nn as nn
+import torch.optim as optim
 from torch.distributions.categorical import Categorical
 
 class PPOMemory:
