@@ -1,0 +1,4 @@
+Reimplementation of PPO with PyTorch, following this tutorial https://www.youtube.com/watch?v=hlv79rcHws0
+
+Tested on Cartpole-V1
+
