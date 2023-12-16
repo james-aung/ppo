@@ -89,7 +89,7 @@ class CriticNetwork(nn.Module):
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
-    def forward(self, state)
+    def forward(self, state):
         value = self.critic(state)
         return value
     
@@ -100,7 +100,7 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(T.load(self.checkpoint_file))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95, policy_clip=0.2, batch_size=64, N=2048, n_epoch=10) # hyperparameters from paper. N is the number of timesteps before we update the network
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95, policy_clip=0.2, batch_size=64, N=2048, n_epoch=10): # hyperparameters from paper. N is the number of timesteps before we update the network
         self.gamma = gamma
         self.policy_clip = policy_clip
         self.n_epoch = n_epoch
