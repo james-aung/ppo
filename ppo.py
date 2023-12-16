@@ -137,24 +137,66 @@ class Agent:
         return action, probs, value
     
     def learn(self):
-        # first we generate the batches that we will use to update the network
-        for _ in range(self.n_epoch): # we iterate over the batches for n_epoch times
+        for _ in range(self.n_epoch): # we repeat this process n_epoch times
+            
+            # first we generate the batches that we will use to update the network
             states, actions, old_probs, values, rewards, dones, batches = self.memory.generate_batches()
             
             # Calculate advantages
             advantage = np.zeros(len(rewards), dtype=np.float32) # initialize advantage array with zeros for each timestep
 
-            # For each timestep, we calculate the discounted sum of future rewards and subtract the state value to get the advantage
+            # For every timestep that we have in memory, we calculate the discounted sum of future rewards and subtract the state value to get the advantage
+            # We iterate over rewards because its standard practice to have a reward for each timestep, even if the reward is 0.
             # The advantage is the discounted sum of future rewards minus the estimated state value (from the critic)
             for t in range(len(rewards)-1): # we don't calculate the advantage for the last timestep because there is no next state, so we leave it as 0
                 discount = 1 # we initialize the discount factor to 1 and decrease it for each timestep by multiplying it by gamma*lambda
                 a_t = 0
-                for k in range(t, len(rewards)-1): # we only look at future rewards TODO why do we -1?
+                for k in range(t, len(rewards)-1): # we only look at future rewards
                     value_next_state = self.gamma*values[k+1] * (1-int(dones[k])) # if dones[k] is 1, then we are at the end of the episode and there is no next state and so we multiply by 0. dones is a boolean array
                     td_error = rewards[k] + value_next_state - values[k]
                     a_t += discount*td_error
                     discount *= self.gamma*self.gae_lambda # rewards further in the future are discounted more
                 advantage[t] = a_t
+
+            # We end up with an array of advantages for each timestep, which represents how good Q(s,a) is compared to V(s)
             advantage = T.tensor(advantage).to(self.actor.device)
 
-            values = T.tensor(values).to(self.actor.device)
+            values = T.tensor(values).to(self.actor.device) # values contains the estimated state values from the critic for all the states that the agent has visited in memory. We need it for the critic loss
+
+            for batch in batches:
+
+                # here a batch is a subset of the experience that we have in memory. each experience is a tuple of (state, action, old_prob, value, reward, done)
+                # create tensors of relevant data for the current batch
+                states_batch = T.tensor(states[batch], dtype=T.float).to(self.actor.device) # the state during each experience in the batch, TODO ?2D tensor?
+                old_probs_batch = T.tensor(old_probs[batch]).to(self.actor.device) # 1D tensor of log probabilities for each action taken in each experience
+                actions_batch = T.tensor(actions[batch]).to(self.actor.device) # tensor of actions taken in each experience. If discrete action space, then this is a 1D tensor. If continuous action space, then this is a 2D tensor TODO check
+
+                # earlier in the training loop the agent interacts with the environment and stores old action probabilities in the memory
+                # now we want to calculate the new action probabilities using the current policy
+                dist = self.actor(states_batch) # forward method is automatically called because we inherited from nn.Module
+                critic_value = self.critic(states_batch)
+                critic_value = T.squeeze(critic_value)
+
+                # Calculate loss for actor
+                new_probs = dist.log_prob(actions_batch) # dist.log_prob gives the logprob of the given actions, so we get the logprob of each action in actions_batch
+                prob_ratio = new_probs.exp() / old_probs_batch.exp()
+                weighted_probs = advantage[batch] * prob_ratio
+                weighted_clipped_probs = T.clamp(prob_ratio, 1-self.policy_clip, 1+self.policy_clip)*advantage[batch] # clamp takes three arguments: the tensor, the min value, and the max value. It returns a tensor with the same shape as the input tensor but with all the values clamped between min and max
+                actor_loss = -T.min(weighted_probs, weighted_clipped_probs).mean() # we negate the loss because we want to maximize instead of minimize
+
+                # Calculate loss for critic using TD learning TODO check if it's TD learning
+                returns = advantage[batch] + values[batch]  # current estimate of the return by the critic
+                critic_loss = (returns-critic_value)**2 # Loss is the MSE between the returns and the critic value
+                critic_loss = critic_loss.mean()
+
+                total_loss = actor_loss + 0.5*critic_loss
+
+                self.actor.optimizer.zero_grad()
+                self.critic.optimizer.zero_grad()
+                total_loss.backward()
+                self.actor.optimizer.step()
+                self.critic.optimizer.step()
+            
+        self.memory.clear_memory()
+
+            
