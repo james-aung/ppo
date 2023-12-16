@@ -100,10 +100,10 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(T.load(self.checkpoint_file))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95, policy_clip=0.2, batch_size=64, N=2048, n_epoch=10): # hyperparameters from paper. N is the number of timesteps before we update the network
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95, policy_clip=0.2, batch_size=64, N=2048, n_epochs=10): # hyperparameters from paper. N is the number of timesteps before we update the network
         self.gamma = gamma
         self.policy_clip = policy_clip
-        self.n_epoch = n_epoch
+        self.n_epoch = n_epochs
         self.gae_lambda = gae_lambda
         self.batch_size = batch_size
 
@@ -112,7 +112,7 @@ class Agent:
         self.memory = PPOMemory(batch_size)
 
     def remember(self, state, action, probs, vals, reward, done):
-        self.memory.store(state, action, probs, vals, reward, done)
+        self.memory.store_memory(state, action, probs, vals, reward, done)
 
     def save_models(self):
         print('Saving models...')
