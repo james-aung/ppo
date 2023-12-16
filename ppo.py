@@ -144,14 +144,13 @@ class Agent:
             
             # Calculate advantages
             advantage = np.zeros(len(rewards), dtype=np.float32) # initialize advantage array with zeros for each timestep
-
             # For every timestep that we have in memory, we calculate the discounted sum of future rewards and subtract the state value to get the advantage
             # We iterate over rewards because its standard practice to have a reward for each timestep, even if the reward is 0.
             # The advantage is the discounted sum of future rewards minus the estimated state value (from the critic)
             for t in range(len(rewards)-1): # we don't calculate the advantage for the last timestep because there is no next state, so we leave it as 0
                 discount = 1 # we initialize the discount factor to 1 and decrease it for each timestep by multiplying it by gamma*lambda
                 a_t = 0
-                for k in range(t, len(rewards)-1): # we only look at future rewards
+                for k in range(t, len(rewards)-1): # adv = dt + gl*dt+1 + (gl)^2*dt+2 + ... + (gl)^(T-t-1)*dt+T-1; so here we are looping over the timesteps from t to T-1
                     value_next_state = self.gamma*values[k+1] * (1-int(dones[k])) # if dones[k] is 1, then we are at the end of the episode and there is no next state and so we multiply by 0. dones is a boolean array
                     td_error = rewards[k] + value_next_state - values[k]
                     a_t += discount*td_error
@@ -189,7 +188,7 @@ class Agent:
                 critic_loss = (returns-critic_value)**2 # Loss is the MSE between the returns and the critic value
                 critic_loss = critic_loss.mean()
 
-                total_loss = actor_loss + 0.5*critic_loss
+                total_loss = actor_loss + 0.5*critic_loss # TODO why do we combine the actor and critic loss like this?
 
                 self.actor.optimizer.zero_grad()
                 self.critic.optimizer.zero_grad()
